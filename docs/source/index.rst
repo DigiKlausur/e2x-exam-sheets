@@ -14,7 +14,6 @@ Additionally, the student sheet contains space for a hashcode and signature to v
 
 Look at an example of a generated exam sheet in `PDF Format <_static/example_sheet.pdf>`_ or `HTML Format <_static/example_sheet.html>`_.
 
-
 .. toctree::
    :maxdepth: 2
    :caption: Getting Started:
@@ -26,6 +25,17 @@ Look at an example of a generated exam sheet in `PDF Format <_static/example_she
    :caption: User Guide:
 
    user_guide/index
+
+Example Sheet
+-------------
+
+.. raw:: html
+
+   <div style="text-align: center;">
+   <embed src="_static/example_sheet.pdf" type="application/pdf" width="100%" height="800px" style="border: 1px solid gray;"></iframe>   
+   </div>
+
+
 
 
 Indices and tables
