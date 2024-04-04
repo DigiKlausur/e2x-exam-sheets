@@ -32,8 +32,7 @@ class ExamSheetGenerator:
             date (str): The date of the exam.
             semester (str): The semester in which the exam is being conducted.
             exam_name (str): The name of the exam.
-            examiner_1 (str): The name of the first examiner.
-            examiner_2 (str): The name of the second examiner.
+            examiners (List[str]): A list of examiners.
             university_name (str): The name of the university.
             department_name (str): The name of the department.
             degree_program (str): The degree program.
