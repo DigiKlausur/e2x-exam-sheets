@@ -9,7 +9,7 @@
 project = "e2x-exam-sheets"
 copyright = "2024, Tim Metzler"
 author = "Tim Metzler"
-release = "0.0.1"
+release = "0.0.2"
 github_project_url = "https://github.com/DigiKlausur/e2x-exam-sheets"
 
 # -- General configuration ---------------------------------------------------
