@@ -1,10 +1,18 @@
+import glob
+import json
 import os
-from collections import defaultdict
 from tempfile import NamedTemporaryFile
-from typing import Dict, List, Union
+from typing import Dict, List
 
+import pandas as pd
+import PyPDF2
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+TEMPLATE_DIR = os.path.join(STATIC_DIR, "templates")
+CSS_DIR = os.path.join(STATIC_DIR, "css")
+LOCALES_DIR = os.path.join(STATIC_DIR, "locales")
 
 
 class ExamSheetGenerator:
@@ -42,70 +50,197 @@ class ExamSheetGenerator:
             hashcode_block_size (int, optional): The size of each block in the hashcode.
                 Defaults to 4.
         """
-        HERE = os.path.dirname(os.path.abspath(__file__))
-        self.env = Environment(loader=FileSystemLoader(os.path.join(HERE, "templates")))
+        self.env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
         self.template = self.env.get_template("exam_sheet.html")
-        self.exam_info = dict(
-            date=date,
-            semester=semester,
-            exam_name=exam_name,
-            examiners=examiners,
-            degree_program=degree_program,
-            university_name=university_name,
-            department_name=department_name,
-            hashcode_num_blocks=hashcode_num_blocks,
-            hashcode_block_size=hashcode_block_size,
-        )
+        self.exam_info = {
+            "date": date,
+            "semester": semester,
+            "exam_name": exam_name,
+            "examiners": examiners,
+            "degree_program": degree_program,
+            "university_name": university_name,
+            "department_name": department_name,
+            "hashcode_num_blocks": hashcode_num_blocks,
+            "hashcode_block_size": hashcode_block_size,
+        }
         self.language = language
 
-    def generate_html(
-        self,
-        students: List[Dict[str, str]],
-        output_file: str = None,
-    ) -> Union[str, None]:
+    def get_css(self) -> str:
         """
-        Generates an HTML exam sheet for the given students.
-
-        Args:
-            students (List[Dict[str, str]]): A list of dictionaries containing the
-                student information.
-            output_file (str, optional): The path to the output file. If not provided,
-                the HTML content is returned. Defaults to None.
+        Returns the CSS content for the exam sheet.
 
         Returns:
-            Union[str, None]: The HTML content if no output file is provided, otherwise None.
+            str: The CSS content.
         """
-        student_groups = defaultdict(list)
-        for student in students:
-            student_groups[student["room"]].append(student)
-        html = self.template.render(
-            exam_info=self.exam_info,
-            language=self.language,
-            student_groups=student_groups,
-        )
-        if output_file:
-            with open(output_file, "w") as f:
-                f.write(html)
-        else:
-            return html
+        css_files = glob.glob(os.path.join(CSS_DIR, "*.css"))
+        format_specific_css_files = glob.glob(os.path.join(CSS_DIR, "*.css"))
+        css_files.extend(format_specific_css_files)
+        css_content = ""
+        for css_file in css_files:
+            with open(css_file, "r") as f:
+                css_content += "\n" + f.read()
+        return css_content
+
+    def load_labels(self, language: str) -> Dict[str, str]:
+        """
+        Loads the labels for the specified language.
+
+        Args:
+            language (str): The language for which to load labels.
+
+        Returns:
+            Dict[str, str]: A dictionary containing the labels.
+        """
+        labels_file = os.path.join(LOCALES_DIR, f"labels_{language}.json")
+        if not os.path.exists(labels_file):
+            raise FileNotFoundError(f"Labels file for language '{language}' not found.")
+        with open(labels_file, "r") as f:
+            labels_content = f.read()
+        labels = json.loads(labels_content)
+        return labels
 
     def generate_pdf(
         self,
-        students: List[Dict[str, str]],
+        students: pd.DataFrame,
         output_file: str,
+        separate_file_per_room: bool = False,
     ) -> None:
         """
         Generates a PDF exam sheet for the given students.
 
         Args:
-            students (List[Dict[str, str]]): A list of dictionaries containing the
-                student information.
+            students (pd.DataFrame): A DataFrame containing the student information.
             output_file (str): The path to the output PDF file.
+            separate_file_per_room (bool, optional): If True, creates a separate PDF file
+                for each room with suffix "_room.pdf". If False, merges all rooms into
+                a single PDF file. Defaults to False.
 
         Returns:
             None
         """
-        with NamedTemporaryFile(suffix=".html") as f:
-            html_file = f.name
-            self.generate_html(students, html_file)
-            HTML(html_file).write_pdf(output_file)
+        if separate_file_per_room:
+            # Create separate PDF for each room
+            base_name = output_file.rsplit(".", 1)[0] if "." in output_file else output_file
+            for room, group in students.groupby("room"):
+                room_students = group.reset_index(drop=True)
+                room_output_file = f"{base_name}_{room}.pdf"
+                self.generate_room_pdf(str(room), room_students, room_output_file)
+        else:
+            # Create all room PDFs as temp files and merge them
+            merger = PyPDF2.PdfWriter()
+            temp_file_contexts = []
+
+            try:
+                # Create all temporary files with context managers
+                for room, group in students.groupby("room"):
+                    room_students = group.reset_index(drop=True)
+                    temp_file = NamedTemporaryFile(suffix=f"_{room}.pdf", delete=False)
+                    temp_file_contexts.append(temp_file)
+
+                    with temp_file:
+                        self.generate_room_pdf(str(room), room_students, temp_file.name)
+                        merger.append(temp_file.name)
+
+                # Write the merged PDF to the output file
+                with open(output_file, "wb") as output_pdf:
+                    merger.write(output_pdf)
+
+            finally:
+                # Clean up temporary files
+                for temp_file in temp_file_contexts:
+                    if os.path.exists(temp_file.name):
+                        os.unlink(temp_file.name)
+
+    def _generate_supervision_list(
+        self,
+        room: str,
+        students: pd.DataFrame,
+        output_file: str,
+    ) -> None:
+        """
+        Generates a supervision list for the given students.
+
+        Args:
+            room (str): The room for which the supervision list is generated.
+            students (List[Dict[str, str]]): A list of dictionaries containing the
+                student information.
+            output_file (str): The path to the output file.
+        """
+        html = self.env.get_template("supervision_list.html").render(
+            students=students.to_dict("records"),
+            exam_info=self.exam_info,
+            labels=self.load_labels(self.language),
+            room=room,
+        )
+        HTML(string=html).write_pdf(output_file)
+
+    def _generate_exam_sheets(
+        self,
+        room: str,
+        students: pd.DataFrame,
+        output_file: str,
+        add_empty_page: bool = False,
+    ) -> None:
+        """
+        Generates exam sheets for the given students.
+        Args:
+            room (str): The room for which the exam sheets are generated.
+            students (List[Dict[str, str]]): A list of dictionaries containing the
+                student information.
+            output_file (str): The path to the output file.
+            add_empty_page (bool, optional): Whether to add an empty page at the beginning.
+                Defaults to False.
+        """
+        html = self.env.get_template("exam_sheet.html").render(
+            students=students.to_dict("records"),
+            room=room,
+            exam_info=self.exam_info,
+            labels=self.load_labels(self.language),
+            css=self.get_css(),
+            add_empty_page=add_empty_page,
+        )
+        HTML(string=html).write_pdf(output_file)
+
+    def generate_room_pdf(
+        self,
+        room: str,
+        students: pd.DataFrame,
+        output_file: str,
+    ) -> None:
+        """
+        Generates a PDF exam sheet for the given room and students.
+        This sheet includes both the supervision list and the exam sheet.
+
+        Args:
+            room (str): The room for which the exam sheet is generated.
+            students (List[Dict[str, str]]): A list of dictionaries containing the
+                student information.
+            output_file (str): The path to the output PDF file.
+            add_empty_page (bool, optional): Whether to add an empty page at the beginning.
+                Defaults to False.
+        """
+        with NamedTemporaryFile(suffix=".pdf") as f1, NamedTemporaryFile(suffix=".pdf") as f2:
+            supervision_pdf = f1.name
+            sheet_pdf = f2.name
+
+            # Generate the supervision list for the room
+            self._generate_supervision_list(room, students, supervision_pdf)
+
+            # Check if we need to add an empty page.
+            # If the number of pages in the supervision PDF is odd, we add an empty page
+            n_pages = len(PyPDF2.PdfReader(supervision_pdf).pages)
+            should_add_empty_page = n_pages % 2 == 1
+
+            # Generate the exam sheet for the room
+            self._generate_exam_sheets(
+                room, students, sheet_pdf, add_empty_page=should_add_empty_page
+            )
+
+            # Merge the two PDFs
+            merger = PyPDF2.PdfWriter()
+            merger.append(supervision_pdf)
+            merger.append(sheet_pdf)
+
+            # Write the merged PDF to the output file
+            with open(output_file, "wb") as output_pdf:
+                merger.write(output_pdf)
