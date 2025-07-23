@@ -26,7 +26,9 @@ classifiers = [
 ]
 dependencies = [
   "jinja2",
-  "weasyprint"
+  "weasyprint",
+  "pandas",
+  "PyPDF2"
 ]
 
 [project.urls]
