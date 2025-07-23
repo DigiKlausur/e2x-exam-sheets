@@ -17,8 +17,8 @@ How to generate exam sheets?
 1. Create the student information.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-First, you need to create a list of dictionaries, where each dictionary contains the information of a student.
-The dictionary should contain the following entries:
+First, you need to create a pandas dataframe with the information of the students.
+The dataframe should contain the following columns:
 
 * first_name: The student's first name
 * last_name: The student's last name
@@ -27,44 +27,9 @@ The dictionary should contain the following entries:
 * username: The student's username
 * password: The student's password
 
-Optionally you can add the following entries:
+Optionally you can add the following column:
 
 * is_backup: If True, the student is a backup student. These will not be included in the overview page.
-
-
-Here is an example of a student list:
-
-.. code-block:: python
-
-    students = [
-        dict(
-            first_name='John',
-            last_name='Doe',
-            room='A101',
-            seat=1,
-            username='johndoe',
-            password='password',
-            is_backup=False # Optional
-        ),
-        dict(
-            first_name='Jane',
-            last_name='Doe',
-            room='A101',
-            seat=2,
-            username='janedoe',
-            password='password',
-            is_backup=False # Optional
-        ),
-        dict(
-            first_name="Backup",
-            last_name="Student",
-            room="A101",
-            seat=3,
-            username="backupstudent",
-            password="password",
-            is_backup=True # Optional
-        )
-    ]
 
 
 2. Generate the exam sheets.
@@ -91,14 +56,20 @@ First you need to create an instance of the class:
         hashcode_block_size=4, # Optional. The number of characters in each block of the hashcode        
     )
 
-Then you can generate the exam sheets by calling the method :meth:`ExamSheetGenerator.generate_html` or :meth:`ExamSheetGenerator.generate_pdf`:
+Then you can generate the exam sheets by calling the method :meth:`ExamSheetGenerator.generate_pdf`:
 
 .. code-block:: python
 
-    generator.generate_html(students, output_file='exam_sheets.html')
     generator.generate_pdf(students, output_file='exam_sheets.pdf')
 
-Here is the output in `PDF Format <../_static/example_sheet.pdf>`_ or `HTML Format <../_static/example_sheet.html>`_.
+Here is the output in `PDF Format <../_static/example_sheet.pdf>`_.
+
+You can also generate the exam sheets as separate PDF files for each room by passing the argument `separate_file_per_room=True`.
+Then the method will create a separate PDF file for each room, suffixed with the room name:
+
+.. code-block:: python
+
+    generator.generate_pdf(students, output_file='exam_sheets.pdf', separate_file_per_room=True)
 
 
 .. note::
