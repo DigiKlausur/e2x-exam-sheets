@@ -52,7 +52,7 @@ path = "e2x_exam_sheets/__about__.py"
 github_url = "https://github.com/Digiklausur/e2x-exam-sheets"
 
 [tool.tbump.version]
-current = "0.0.2"
+current = "0.1.0"
 regex = '''
   (?P<major>\d+)
   \.
